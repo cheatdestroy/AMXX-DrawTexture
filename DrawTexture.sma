@@ -229,19 +229,27 @@ public client_putinserver(id)
 
 public EntSpeed(id)
 {
+	if(!(get_user_flags(id) & FLAG_ACCESS))
+	{
+		return PLUGIN_HANDLED;
+	}
+
 	new args[256];
 	read_args(args, charsmax(args));
 	remove_quotes(args);
-	if(is_str_num(args) && pev_valid(g_iSelectedEnt[id][entID]) && !g_iSelectedEnt[id][entDELETE])
+	if(is_str_num(args))
 	{
-		new Float:fSpeed = str_to_float(args);
-		set_pev(g_iSelectedEnt[id][entID], pev_speed, fSpeed);
+		if(pev_valid(g_iSelectedEnt[id][entID]) && !g_iSelectedEnt[id][entDELETE] && g_iSelectedEnt[id][entID] != -1)
+		{
+			new Float:fSpeed = str_to_float(args);
+			set_pev(g_iSelectedEnt[id][entID], pev_speed, fSpeed);
 
-		g_iSelectedEnt[id][entSPEED] = fSpeed;
-		ArraySetCell(g_aEntity, GetIndex(g_iSelectedEnt[id][entMODEL]), fSpeed, entSPEED);
+			g_iSelectedEnt[id][entSPEED] = fSpeed;
+			ArraySetCell(g_aEntity, GetIndex(g_iSelectedEnt[id][entMODEL]), fSpeed, entSPEED);
 
-		client_print_color(id, print_team_blue, "^4[%s] ^1Вы ^3установили скорость ^1(^4%0.1f^1) ^1выбранному объекту!", PLUG_NAME, str_to_float(args));
-		return EntityOptions(id);
+			client_print_color(id, print_team_blue, "^4[%s] ^1Вы ^3установили скорость ^1(^4%0.1f^1) ^1выбранному объекту!", PLUG_NAME, str_to_float(args));
+			return EntityOptions(id);
+		}
 	}
 
 	client_print_color(id, print_team_red, "^4[%s] ^1Введите ^3целое число!", PLUG_NAME);
@@ -293,6 +301,8 @@ public DelayCheck(iEntityID)
 			ArrayGetArray(g_aEntity, index, aEntity);
 			if(equal(szClass, aEntity[entNAME]) && equal(szModel, aEntity[entMODEL]))
 			{
+				aEntity[entID] = iEntityID;
+				ArraySetCell(g_aEntity, index, aEntity[entID], entID);
 				aEntity[entSTACK] = -1;
 				set_pev(iEntityID, pev_speed, aEntity[entSPEED]);
 				if(aEntity[entDELETE])
@@ -436,13 +446,8 @@ public Handle_DrawMenu(id, iKey)
 
 public PointsOptions(id)
 {
-	if(!(get_user_flags(id) & FLAG_ACCESS))
-	{
-		return PLUGIN_HANDLED;
-	}
-
 	new Float:fOrigin[3]; pev(id, pev_origin, fOrigin);
-	new szMenu[512], iKeys = (1<<2|1<<3|1<<4|1<<5|1<<6|1<<8|1<<9), iLen = formatex(szMenu, charsmax(szMenu), "\yМеню точек^n\dX [%0.3f] | Y [%0.3f] | Z [%0.3f]^n^n", fOrigin[0], fOrigin[1], fOrigin[2]);
+	new szMenu[512], iKeys = (1<<2|1<<3|1<<5|1<<6|1<<7|1<<9), iLen = formatex(szMenu, charsmax(szMenu), "\yМеню точек^n\dX [%0.3f] | Y [%0.3f] | Z [%0.3f]^n^n", fOrigin[0], fOrigin[1], fOrigin[2]);
 	if(g_iSelectedPoint[id][pntPOINT] < MAX_POINTS)
 	{
 		iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r1\y] \wПоставить точку \d[\r%d\d]^n", g_iSelectedPoint[id][pntPOINT]);
@@ -457,15 +462,24 @@ public PointsOptions(id)
 	else iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r2\y] \dУдалить последнюю точку^n");
 	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r3\y] \wТип координат: %s^n", g_szCoordsType[g_iCoordsType[id]]);
 	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r4\y] \wЦвет \r[%s]^n", g_szColors[g_iSelectedPoint[id][pntCOLOR]]);
-	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r5\y] \wСохранить^n^n");
-	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r6\y] \wОбновить координаты^n");
-	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r7\y] \wТелепорт^n^n");
+	if(g_iSelectedPoint[id][pntPOINT] == 2)
+	{
+		iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r5\y] \yПостроить прямоугольник^n");
+		iKeys |= (1<<4);
+	}
+	else iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r5\y] \dПостроить прямоугольник^n");
+	if(g_iSelectedPoint[id][pntPOINT] > 1)
+	{
+		iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\y[\r6\y] \wСохранить^n^n");
+	}
+	else iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\y[\r6\y] \dСохранить^n^n");
+	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r7\y] \wОбновить координаты^n");
+	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r8\y] \wТелепорт^n^n");
 	if(g_iSelectedPoint[id][pntSTACK] != -1)
 	{
-		iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r8\y] \rУдалить^n^n");
-		iKeys |= (1<<7);
+		iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r9\y] \rУдалить^n^n");
+		iKeys |= (1<<8);
 	}
-	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r9\y] \wНазад^n");
 	formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r0\y] \wВыход");
 	return show_menu(id, iKeys, szMenu, -1, "PointsOptions");
 }
@@ -476,9 +490,9 @@ public Handle_PointsOptions(id, iKey)
 	{
 		case 0:
 		{
-			if(!is_aiming_at_sky(id) && g_iSelectedPoint[id][pntPOINT] < MAX_POINTS)
+			if(g_iSelectedPoint[id][pntPOINT] < MAX_POINTS)
 			{
-				if(g_iCoordsType[id] == Aim)
+				if(g_iCoordsType[id] == Aim && !is_aiming_at_sky(id))
 				{
 					fm_get_aim_origin(id, g_iPlayerPoints[id][g_iSelectedPoint[id][pntPOINT]]);
 				}
@@ -514,6 +528,54 @@ public Handle_PointsOptions(id, iKey)
 		}
 		case 4:
 		{
+			if(g_iSelectedPoint[id][pntPOINT] == 2)
+			{
+				new Float:maxX, Float:minX, Float:maxY, Float:minY, Float:maxZ, Float:minZ;
+
+				minZ = floatmin(g_iPlayerPoints[id][0][2], g_iPlayerPoints[id][1][2]);
+				maxZ = floatmax(g_iPlayerPoints[id][0][2], g_iPlayerPoints[id][1][2]);
+
+				new Float:diffX, Float:diffY;
+				diffX = floatabs(floatabs(g_iPlayerPoints[id][0][0]) - floatabs(g_iPlayerPoints[id][1][0]));
+				diffY = floatabs(floatabs(g_iPlayerPoints[id][0][1]) - floatabs(g_iPlayerPoints[id][1][1]));
+				if(diffX > diffY)
+				{
+					minX = floatmin(g_iPlayerPoints[id][0][0], g_iPlayerPoints[id][1][0]);
+					maxX = floatmax(g_iPlayerPoints[id][0][0], g_iPlayerPoints[id][1][0]);
+					maxY = minY = g_iPlayerPoints[id][0][1];
+				}
+				else
+				{
+					minY = floatmin(g_iPlayerPoints[id][0][1], g_iPlayerPoints[id][1][1]);
+					maxY = floatmax(g_iPlayerPoints[id][0][1], g_iPlayerPoints[id][1][1]);
+					maxX = minX = g_iPlayerPoints[id][0][0];
+				}
+
+				g_iPlayerPoints[id][0][0] = minX;
+				g_iPlayerPoints[id][0][1] = minY;
+				g_iPlayerPoints[id][0][2] = minZ;
+
+				g_iPlayerPoints[id][1][0] = maxX;
+				g_iPlayerPoints[id][1][1] = maxY;
+				g_iPlayerPoints[id][1][2] = minZ;
+
+				g_iPlayerPoints[id][2][0] = maxX;
+				g_iPlayerPoints[id][2][1] = maxY;
+				g_iPlayerPoints[id][2][2] = maxZ;
+
+				g_iPlayerPoints[id][3][0] = minX;
+				g_iPlayerPoints[id][3][1] = minY;
+				g_iPlayerPoints[id][3][2] = maxZ;
+
+				g_iPlayerPoints[id][4][0] = minX;
+				g_iPlayerPoints[id][4][1] = minY;
+				g_iPlayerPoints[id][4][2] = minZ;
+
+				g_iSelectedPoint[id][pntPOINT] = 5;
+			}
+		}
+		case 5:
+		{
 			if(g_iSelectedPoint[id][pntSTACK] == -1)
 			{
 				for(new i = 0; i < MAX_POINTS; i++)
@@ -548,19 +610,19 @@ public Handle_PointsOptions(id, iKey)
 
 			return PointsMenu(id, g_iPlayerPage[id] = 0);
 		}
-		case 5:
+		case 6:
 		{
 			new Float:fOrigin[3]; pev(id, pev_origin, fOrigin);
 			client_print(id, print_console, "%f %f %f", fOrigin[0], fOrigin[1], fOrigin[2]);
 		}
-		case 6:
+		case 7:
 		{
 			if(!is_empty(g_iPlayerPoints[id][0]))
 			{
 				set_pev(id, pev_origin, g_iPlayerPoints[id][0]);
 			}
 		}
-		case 7:
+		case 8:
 		{
 			if(g_iSelectedPoint[id][pntSTACK] != -1)
 			{
@@ -583,10 +645,6 @@ public Handle_PointsOptions(id, iKey)
 				return DrawMenu(id);
 			}
 		}
-		case 8:
-		{
-			return DrawMenu(id);
-		}
 		case 9:
 		{
 			return PLUGIN_HANDLED;
@@ -597,11 +655,6 @@ public Handle_PointsOptions(id, iKey)
 
 public PointsMenu(id, iPage)
 {
-	if(!(get_user_flags(id) & FLAG_ACCESS))
-	{
-		return PLUGIN_HANDLED;
-	}
-
 	if(iPage < 0)
 	{
 		return PLUGIN_HANDLED;
@@ -682,11 +735,6 @@ public Handle_PointsMenu(id, iKey)
 
 public EntityMenu(id, iPage)
 {
-	if(!(get_user_flags(id) & FLAG_ACCESS))
-	{
-		return PLUGIN_HANDLED;
-	}
-
 	if(iPage < 0)
 	{
 		return PLUGIN_HANDLED;
@@ -765,11 +813,6 @@ public Handle_EntityMenu(id, iKey)
 
 public EntityOptions(id)
 {
-	if(!(get_user_flags(id) & FLAG_ACCESS))
-	{
-		return PLUGIN_HANDLED;
-	}
-
 	new index = GetIndex(g_iSelectedEnt[id][entMODEL]);
 
 	if(index == -1)
@@ -957,6 +1000,11 @@ public Handle_EntityOptions(id, iKey)
 
 public DrawRectangle(iDir, iEntityID, iEntitySTACK)
 {
+	if(!pev_valid(iEntityID))
+	{
+		return -1;
+	}
+
 	if(iDir == DirNONE)
 	{
 		for(new i = 0; i < MAX_RECT_POINTS; i++)
@@ -1250,7 +1298,7 @@ stock Save(file, index, iMode = 0)
 	new szText[256];
 
 	//fRect variables
-	new aEntity[EntityInfo], szClass[32], szModel[32], szID[16], iID;
+	new aEntity[EntityInfo], szClass[32], szModel[32];
 
 	//fPoints variables
 	new aPoints[PointsInfo], iLen, iCount;
@@ -1258,8 +1306,8 @@ stock Save(file, index, iMode = 0)
 	if(file == fRect)
 	{
 		ArrayGetArray(g_aEntity, index, aEntity);
-		formatex(szText, charsmax(szText), "^"%s^" ^"%s^" ^"%d^" ^"%d^" ^"%d^" ^"%f^" ^"%d^"", 
-			aEntity[entNAME], aEntity[entMODEL], aEntity[entID], aEntity[entDIR], aEntity[entCOLOR], aEntity[entSPEED], aEntity[entDELETE]);
+		formatex(szText, charsmax(szText), "^"%s^" ^"%s^" ^"%d^" ^"%d^" ^"%f^" ^"%d^"", 
+			aEntity[entNAME], aEntity[entMODEL], aEntity[entDIR], aEntity[entCOLOR], aEntity[entSPEED], aEntity[entDELETE]);
 	}
 	else if(file == fPoints)
 	{
@@ -1280,9 +1328,8 @@ stock Save(file, index, iMode = 0)
 		fgets(iOldFile, szData, 255);
 		if(file == fRect)
 		{
-			parse(szData, szClass, 31, szModel, 31, szID, 15);
-			iID = str_to_num(szID);
-			isAllowed = equal(szClass, aEntity[entNAME]) && equal(szModel, aEntity[entMODEL]) && iID == aEntity[entID];
+			parse(szData, szClass, 31, szModel, 31);
+			isAllowed = equal(szClass, aEntity[entNAME]) && equal(szModel, aEntity[entMODEL]);
 		}
 		else if(file == fPoints)
 		{
@@ -1338,7 +1385,7 @@ stock Load(file)
 	new szData[256];
 
 	//fRect variables
-	new szName[32], szModel[32], szEnt[16], szDir[16], szColor[16], szSpeed[16], szDelete[16], aEntity[EntityInfo];
+	new szName[32], szModel[32], szDir[16], szColor[16], szSpeed[16], szDelete[16], aEntity[EntityInfo];
 
 	//fPoints variables
 	new szPoint[16], szPoints[MAX_POINTS][32], aPoints[PointsInfo];
@@ -1354,11 +1401,10 @@ stock Load(file)
 
 		if(file == fRect)
 		{
-			parse(szData, szName, 31, szModel, 31, szEnt, 15, szDir, 15, szColor, 15, szSpeed, 15, szDelete, 15);
+			parse(szData, szName, 31, szModel, 31, szDir, 15, szColor, 15, szSpeed, 15, szDelete, 15);
 
 			aEntity[entMODEL] = szModel;
 			aEntity[entNAME] = szName;
-			aEntity[entID] = str_to_num(szEnt);
 			aEntity[entDIR] = str_to_num(szDir);
 			aEntity[entCOLOR] = str_to_num(szColor);
 			aEntity[entSPEED] = str_to_float(szSpeed);
