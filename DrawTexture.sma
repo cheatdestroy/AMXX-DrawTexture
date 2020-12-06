@@ -10,7 +10,7 @@
 #pragma semicolon 1
 
 #define PLUG_NAME "Draw Texture"
-#define PLUG_VERSION "1.0.6"
+#define PLUG_VERSION "1.0.7"
 #define PLUG_AUTHOR "CheaT"
 
 #define FLAG_ACCESS ADMIN_BAN
@@ -18,7 +18,7 @@
 #define MIN_POINTS 2
 #define MAX_POINTS 6
 #define MAX_RECT_POINTS 5
-#define MAX_STACKS 33
+#define MAX_STACKS 15
 
 #define TASK_DRAW 692307
 #define TASK_CHECK 692308
@@ -76,8 +76,8 @@ enum _:CoordsType {
 };
 
 new const g_szCoordsType[CoordsType][64] = {
-	"Координаты прицела",
-	"Координаты игрока"
+	"Прицела",
+	"Игрока"
 };
 
 enum _:Colors {
@@ -151,8 +151,6 @@ public plugin_init()
 	register_clcmd("drawt", "DrawMenu");
 	register_clcmd("ent_speed", "EntSpeed");
 
-	set_task(2.0, "DrawTask", TASK_DRAW, _, _, "ab");
-
 	register_menucmd(register_menuid("DrawMenu"), (1<<0|1<<1|1<<2|1<<3|1<<4|1<<5|1<<6|1<<7|1<<8|1<<9), "Handle_DrawMenu");
 	register_menucmd(register_menuid("EntityMenu"), (1<<0|1<<1|1<<2|1<<3|1<<4|1<<5|1<<6|1<<7|1<<8|1<<9), "Handle_EntityMenu");
 	register_menucmd(register_menuid("PointsMenu"), (1<<0|1<<1|1<<2|1<<3|1<<4|1<<5|1<<6|1<<7|1<<8|1<<9), "Handle_PointsMenu");
@@ -225,6 +223,19 @@ public client_putinserver(id)
 	g_iSelectedEnt[id][entSPEED] = 0.0;
 	g_iSelectedEnt[id][entDELETE] = false;
 	g_iSelectedEnt[id][entSTACK] = -1;
+
+	if(!is_user_bot(id))
+	{
+		set_task(2.0, "DrawTask", TASK_DRAW + id, _, _, "ab");
+	}
+}
+
+public client_disconnect(id)
+{
+	if(!is_user_bot(id))
+	{
+		remove_task(TASK_DRAW + id);
+	}
 }
 
 public EntSpeed(id)
@@ -473,7 +484,7 @@ public PointsOptions(id)
 		iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\y[\r6\y] \wСохранить^n^n");
 	}
 	else iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "^n\y[\r6\y] \dСохранить^n^n");
-	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r7\y] \wОбновить координаты^n");
+	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r7\y] \wОбновить коорд.^n");
 	iLen += formatex(szMenu[iLen], charsmax(szMenu) - iLen, "\y[\r8\y] \wТелепорт^n^n");
 	if(g_iSelectedPoint[id][pntSTACK] != -1)
 	{
@@ -499,6 +510,10 @@ public Handle_PointsOptions(id, iKey)
 				else if(g_iCoordsType[id] == Player)
 				{
 					pev(id, pev_origin, g_iPlayerPoints[id][g_iSelectedPoint[id][pntPOINT]]);
+				}
+				else
+				{
+					return PointsOptions(id);
 				}
 
 				++g_iSelectedPoint[id][pntPOINT];
@@ -1170,8 +1185,10 @@ public DrawRectangle(iDir, iEntityID, iEntitySTACK)
 	return iEntitySTACK;
 }
 
-public DrawTask()
+public DrawTask(id)
 {
+	id -= TASK_DRAW;
+
 	new iColor;
 	if(g_iStack > 0)
 	{
@@ -1188,7 +1205,7 @@ public DrawTask()
 			iColor = ArrayGetCell(g_aEntity, i, entCOLOR);
 			for(new j = 1; j < MAX_RECT_POINTS; j++)
 			{
-				CreateBeampoints(g_iEntityRect[iStack][j-1], g_iEntityRect[iStack][j], g_iColors[iColor]);
+				CreateBeampoints(id, g_iEntityRect[iStack][j-1], g_iEntityRect[iStack][j], g_iColors[iColor]);
 			}
 		}
 	}
@@ -1205,20 +1222,20 @@ public DrawTask()
 			iColor = ArrayGetCell(g_aPoints, i, pntCOLOR);
 			for(new j = 1; j < MAX_POINTS; j++)
 			{
-				CreateBeampoints(g_iPoints[i][j-1], g_iPoints[i][j], g_iColors[iColor]);
+				CreateBeampoints(id, g_iPoints[i][j-1], g_iPoints[i][j], g_iColors[iColor]);
 			}
 		}
 	}
 }
 
-public CreateBeampoints(Float:firstOrigin[3], Float:secondOrigin[3], iColors[3])
+public CreateBeampoints(id, Float:firstOrigin[3], Float:secondOrigin[3], iColors[3])
 {
-	if(is_empty(firstOrigin) || is_empty(secondOrigin))
+	if(is_empty(firstOrigin) || is_empty(secondOrigin) || !is_user_connected(id))
 	{
 		return;
 	}
 
-	message_begin(MSG_BROADCAST, SVC_TEMPENTITY);
+	message_begin(MSG_ONE_UNRELIABLE, SVC_TEMPENTITY, {0.0, 0.0, 0.0}, id);
 	write_byte(TE_BEAMPOINTS);
 	engfunc(EngFunc_WriteCoord, firstOrigin[0]);
 	engfunc(EngFunc_WriteCoord, firstOrigin[1]);
@@ -1262,7 +1279,8 @@ stock fm_get_aim_origin(id, Float:origin[3])
 
 stock GetIndex(szModel[])
 {
-	new iIndex = ArrayFindString(g_aEntity, szModel);
+	new iIndex;
+	iIndex = ArrayFindString(g_aEntity, szModel);
 	return iIndex;
 }
 
